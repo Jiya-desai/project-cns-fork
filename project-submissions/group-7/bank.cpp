@@ -1059,7 +1059,7 @@ void handle_client(int client_socket)
         }
 
         // read content of the auth file
-        ifstream auth_file("bank.auth");
+        ifstream auth_file(auth_file_address);
         string auth_content;
         if (auth_file.is_open())
         {
