@@ -47,7 +47,6 @@ def main():
     # Create directories if they don’t exist
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-        print(f"Created directories for {log_file_path}.")
 
     # Check if the log file and secret key already exist
     if os.path.exists(log_file_path) and os.path.exists('secret.key'):
@@ -59,13 +58,10 @@ def main():
     try:
         with open(key_file, 'rb') as kf:
             key = kf.read()
-            print(f"Using existing key from {key_file}.")  # Debugging statement
     except FileNotFoundError:
-        print("Secret key not found. Generating a new one.")
         key = Fernet.generate_key()
         with open(key_file, 'wb') as kf:
             kf.write(key)
-            print(f"New key generated and saved to {key_file}.")  # Debugging statement
 
     # Create a Fernet object with the key (for future encryption use)
     f = Fernet(key)
