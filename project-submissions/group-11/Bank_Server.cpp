@@ -72,73 +72,19 @@ bool is_valid_ip(const string &ip) {
         return true;
     }
 
-    // Split IP address into octets
-    vector<string> octets;
-    stringstream ss(ip);
-    string octet;
+    // Basic format check using regex
+    regex ip_regex("^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$");
     
-    while (getline(ss, octet, '.')) {
-        octets.push_back(octet);
-    }
-
-    // Check if we have exactly 4 octets
-    if (octets.size() != 4) {
+    if (!regex_match(ip, ip_regex)) {
         return false;
     }
 
-    // Convert octets to integers
-    vector<int> ip_parts;
-    for (const string &oct : octets) {
-        // Check if octet is empty or has leading zeros (unless it's just "0")
-        if (oct.empty() || (oct.length() > 1 && oct[0] == '0')) {
-            return false;
-        }
-
-        // Check if octet contains only digits
-        if (!all_of(oct.begin(), oct.end(), ::isdigit)) {
-            return false;
-        }
-
-        try {
-            int value = stoi(oct);
-            if (value < 0 || value > 255) {
-                return false;
-            }
-            ip_parts.push_back(value);
-        } catch (...) {
-            return false;
-        }
+    // Additional validation for special cases
+    if (ip == "0.0.0.0") {
+        return false;
     }
 
-    // Now check if IP falls within valid public ranges
-    unsigned int addr = (ip_parts[0] << 24) | (ip_parts[1] << 16) | (ip_parts[2] << 8) | ip_parts[3];
-
-    // Define valid ranges
-    struct IPRange {
-        unsigned int start;
-        unsigned int end;
-    };
-
-    vector<IPRange> valid_ranges = {
-        {0x01000000, 0x09FFFFFF},      // 1.0.0.0 to 9.255.255.255
-        {0x0B000000, 0x7EFFFFFF},      // 11.0.0.0 to 126.255.255.255
-        {0x80000000, 0xA9FDFFFF},      // 128.0.0.0 to 169.253.255.255
-        {0xA9FF0000, 0xAC0FFFFF},      // 169.255.0.0 to 172.15.255.255
-        {0xAC200000, 0xBFFFFFFF},      // 172.32.0.0 to 191.255.255.255
-        {0xC0000000, 0xC00000FF},      // 192.0.0.0 to 192.0.0.255
-        {0xC0000200, 0xC05862FF},      // 192.0.2.0 to 192.88.98.255
-        {0xC0586300, 0xC0A7FFFF},      // 192.88.99.0 to 192.167.255.255
-        {0xC0A90000, 0xDFFFFFFF}       // 192.169.0.0 to 223.255.255.255
-    };
-
-    // Check if IP falls within any valid range
-    for (const auto &range : valid_ranges) {
-        if (addr >= range.start && addr <= range.end) {
-            return true;
-        }
-    }
-
-    return false;
+    return true;
 }
 void get_server_details() {
     cout << "Enter server IP (default: 127.0.0.1): ";
