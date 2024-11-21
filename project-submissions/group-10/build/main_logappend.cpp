@@ -245,7 +245,7 @@ private:
     }
     // Updates the internal state based on an event
     void updateState(const Event& event) {
-        std::string key = (event.isEmployee ? "E:" : "G:") + event.name;
+        std::string key = (event.isEmployee? "E:" : "G:") + event.name;
         if (event.isArrival) {
             if (event.roomId == -1) {
                 inCampus[key] = true;
@@ -343,20 +343,20 @@ private:
             return encryptAndWriteLog();
         }
 
-    
+
         bool validateEntry(const Event& event) {
             // Basic validation checks
             if (event.timestamp < 0 || event.timestamp > MAX_TIMESTAMP) return false;
             if (!events.empty() && event.timestamp <= events.back().timestamp) return false;
             if (!isValidToken(event.token)) return false;
-            if (!validToken.empty() && event.token != validToken) return false;
+            if (!validToken.empty() && event.token!= validToken) return false;
             if (!isValidName(event.name)) return false;
             
             // Room ID validation - must be either -1 for campus events or >= 0 for room events
-            if (event.roomId != -1 && event.roomId < 0) return false;
+            if (event.roomId!= -1 && event.roomId < 0) return false;
             if (event.roomId > MAX_ROOM_ID) return false;
             
-            std::string key = (event.isEmployee ? "E:" : "G:") + event.name;
+            std::string key = (event.isEmployee? "E:" : "G:") + event.name;
 
             if (event.isArrival) {
                 if (event.roomId == -1) {
@@ -368,11 +368,12 @@ private:
                 }
             } else {
                 if (event.roomId == -1) {
-                    // Leaving campus - Must not be in any room
+                    // Leaving campus - Must be on campus and not in any room
                     if (!inCampus[key] || currentRoom.count(key) > 0) return false;
                 } else {
                     // Leaving room
-                    if (currentRoom[key] != event.roomId) return false;
+                    if (currentRoom[key]!= event.roomId) return false;
+                    if (!inCampus[key]) return false;
                 }
             }
 
