@@ -2,71 +2,73 @@ import sys
 import socket
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives import serialization, hashes
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.fernet import Fernet
 
-def generate_keys():
-    """Generate RSA key pair for the client."""
-    private_key = rsa.generate_private_key(
-        public_exponent=65537,
-        key_size=2048,
-    )
-    public_key = private_key.public_key()
-
-    # Save keys to files
-    with open("client_private_key.pem", "wb") as priv_key_file:
-        priv_key_file.write(
-            private_key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.PKCS8,
-                encryption_algorithm=serialization.NoEncryption(),
-            )
-        )
-    with open("client_public_key.pem", "wb") as pub_key_file:
-        pub_key_file.write(
-            public_key.public_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PublicFormat.SubjectPublicKeyInfo,
-            )
-        )
-
-    print("Client keys generated.")
-    return private_key, public_key
 
 def receive_public_key(conn):
-    """Receive server's public key."""
+    """
+    Receive and load the server's public key.
+    """
+    # Receive the length of the public key file (4 bytes)
     key_length = int.from_bytes(conn.recv(4), 'big')
     public_key_data = conn.recv(key_length)
 
-    with open("server_public_key.pem", "wb") as pub_key_file:
+    # Save the received public key to a file
+    with open("public_key.pem", "wb") as pub_key_file:
         pub_key_file.write(public_key_data)
 
+    # Load the public key for encryption
     public_key = serialization.load_pem_public_key(public_key_data)
-    print("Server's public key received and loaded.")
+    print("Public key received from server and loaded successfully.")
+
     return public_key
 
-def send_public_key(conn, public_key):
-    """Send the client's public key to the server."""
-    public_key_data = public_key.public_bytes(
-        encoding=serialization.Encoding.PEM,
-        format=serialization.PublicFormat.SubjectPublicKeyInfo
+
+def generate_and_send_aes_key(conn, public_key):
+    """
+    Generate a Fernet (AES) key and send it to the server after encrypting it with the server's public key.
+    """
+    # Generate the Fernet key (AES key)
+    fernet_key = Fernet.generate_key()
+
+    # Encrypt the Fernet key with the server's public key
+    encrypted_aes_key = public_key.encrypt(
+        fernet_key,
+        padding.OAEP(
+            mgf=padding.MGF1(algorithm=hashes.SHA256()),
+            algorithm=hashes.SHA256(),
+            label=None
+        )
     )
-    conn.sendall(len(public_key_data).to_bytes(4, 'big'))
-    conn.sendall(public_key_data)
-    print("Client's public key sent to server.")
+    # Send the encrypted AES key to the server
+    conn.sendall(encrypted_aes_key)
+    return fernet_key
+
 
 def is_valid_ip(ip):
-    """Validate IPv4 address format."""
+    """
+    Validate the IPv4 address format.
+    """
     parts = ip.split('.')
     return len(parts) == 4 and all(part.isdigit() and 0 <= int(part) <= 255 for part in parts)
 
+
 def is_valid_port(port):
-    """Validate port number."""
+    """
+    Validate the port number.
+    """
     return port.isdigit() and 1 <= int(port) <= 65535
 
+
 def main():
+    """
+    Main function to handle client-server communication.
+    """
+    # Default IP and port
     host = '127.0.0.1'
     port = 12345
 
+    # Parse command-line arguments for IP and port
     if len(sys.argv) >= 2:
         if is_valid_ip(sys.argv[1]):
             host = sys.argv[1]
@@ -77,54 +79,53 @@ def main():
         if is_valid_port(sys.argv[2]):
             port = int(sys.argv[2])
         else:
-            print("Error: Invalid port number.")
+            print("Error: Invalid port number. Must be an integer between 1 and 65535.")
             sys.exit(1)
     elif len(sys.argv) > 3:
         print("Usage: python3 client.py [<ip> <port>]")
         sys.exit(1)
 
     try:
-        private_key, public_key = generate_keys()
-
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
             client_socket.connect((host, port))
 
-            send_public_key(client_socket, public_key)
-            server_public_key = receive_public_key(client_socket)
+            # Step 1: Receive and load the server's public key
+            public_key = receive_public_key(client_socket)
+
+            # Step 2: Generate and send AES key to the server
+            fernet_key = generate_and_send_aes_key(client_socket, public_key)
+
+            # Step 3: Create a Fernet instance using the generated AES key
+            fernet = Fernet(fernet_key)
 
             while True:
                 try:
-                    command = input("Enter command (or 'exit' to quit): ")
+                    # Get user input for the command
+                    command = input("Enter command (or 'exit' to quit): ").strip()
                     if command.lower() == 'exit':
                         print("Disconnecting from the server...")
                         break
-                    
-                    encrypted_command = server_public_key.encrypt(
-                        command.encode(),
-                        padding.OAEP(
-                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                            algorithm=hashes.SHA256(),
-                            label=None
-                        )
-                    )
+
+                    # Encrypt the command using Fernet
+                    encrypted_command = fernet.encrypt(command.encode())
                     client_socket.sendall(encrypted_command)
 
-                    response = client_socket.recv(4096)
-                    decrypted_response = private_key.decrypt(
-                        response,
-                        padding.OAEP(
-                            mgf=padding.MGF1(algorithm=hashes.SHA256()),
-                            algorithm=hashes.SHA256(),
-                            label=None
-                        )
-                    )
+                    # Receive and decrypt the server's response
+                    encrypted_response = client_socket.recv(4096)
+                    response = fernet.decrypt(encrypted_response).decode()
+
                     print("Response from server:")
-                    print(decrypted_response.decode())
+                    print(response)
                 except KeyboardInterrupt:
                     print("\nClient disconnected gracefully.")
+                    sys.exit(0)
+                except Exception as e:
+                    print(f"An error occurred while processing the response: {e}")
                     break
     except Exception as e:
         print(f"An error occurred: {e}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
