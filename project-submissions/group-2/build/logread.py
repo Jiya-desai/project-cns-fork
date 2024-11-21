@@ -250,7 +250,7 @@ def process_args(args=None):
         else:
             print("Error: Specify either -E for employee or -G for guest.")
             return
-        print(",".join(sorted(set(rooms_visited), key=int)))
+        print(",".join(rooms_visited))
         return
 
     if args.I:
